@@ -31,7 +31,7 @@ public class ReflectionResourceIndex implements ResourceIndex {
         for (Class<?> resourceClass : application.getClasses()) {
             Path resourcePath = resourceClass.getAnnotation(Path.class);
             if (resourcePath != null) {
-                String path = baseUri + resourcePath.value();
+                String path = baseUri + cleanedPath(resourcePath.value());
                 for (Method method : resourceClass.getMethods()) {
                     for (Annotation annotation : method.getAnnotations()) {
                         String methodName = annotation.annotationType().getSimpleName();
@@ -45,7 +45,7 @@ public class ReflectionResourceIndex implements ResourceIndex {
                             Path methodPath = method.getAnnotation(Path.class);
                             String childPath = path;
                             if (methodPath != null) {
-                                childPath += methodPath.value();
+                                childPath += cleanedPath(methodPath.value());
                             }
                             String statusLine = String.format(STATUS_LINE, methodName, childPath);
                             index.put(statusLine, () -> new ReflectionResource(application, method, mapper));
@@ -61,16 +61,20 @@ public class ReflectionResourceIndex implements ResourceIndex {
         String basePath = "/";
         ApplicationPath path = application.getClass().getAnnotation(ApplicationPath.class);
         if (path != null) {
-            String base = path.value();
-            if (!base.startsWith("/")) {
-                base = "/" + base;
-            }
-            basePath = base;
-            if (!basePath.endsWith("/")) {
-                basePath += "/";
+            basePath = cleanedPath(path.value());
+            if (!basePath.equals("/") && basePath.endsWith("/")) {
+                basePath = basePath.substring(0, basePath.lastIndexOf('/'));
             }
         }
         return basePath;
+    }
+
+    protected String cleanedPath(String path) {
+        String base = path;
+        if (!base.startsWith("/")) {
+            base = "/" + path;
+        }
+        return base;
     }
 
     @Override
