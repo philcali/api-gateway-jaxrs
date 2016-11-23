@@ -19,7 +19,7 @@ public class ReflectionResourceIndex implements ResourceIndex {
     private final Map<String, Supplier<Resource>> index;
     private final ObjectMapper mapper;
 
-    public ReflectionResourceIndex(Application application, ObjectMapper mapper) {
+    public ReflectionResourceIndex(final Application application, final ObjectMapper mapper) {
         this.application = application;
         this.mapper = mapper;
         this.index = createCachedIndex();
@@ -48,7 +48,7 @@ public class ReflectionResourceIndex implements ResourceIndex {
                                 childPath += cleanedPath(methodPath.value());
                             }
                             String statusLine = String.format(STATUS_LINE, methodName, childPath);
-                            index.put(statusLine, () -> new ReflectionResource(application, method, mapper));
+                            table.put(statusLine, () -> new ReflectionResource(application, method, mapper));
                         }
                     }
                 }
@@ -69,7 +69,7 @@ public class ReflectionResourceIndex implements ResourceIndex {
         return basePath;
     }
 
-    protected String cleanedPath(String path) {
+    protected String cleanedPath(final String path) {
         String base = path;
         if (!base.startsWith("/")) {
             base = "/" + path;
@@ -78,14 +78,10 @@ public class ReflectionResourceIndex implements ResourceIndex {
     }
 
     @Override
-    public Optional<Resource> findResource(FullHttpRequest request) {
+    public Optional<Resource> findResource(final FullHttpRequest request) {
         String statusLine = String.format(STATUS_LINE, request.getContext().getMethod(),
                 request.getContext().getPath());
-        if (index.containsKey(statusLine)) {
-            return Optional.of(index.get(statusLine).get());
-        } else {
-            return Optional.empty();
-        }
+        return Optional.ofNullable(index.get(statusLine)).map(thunk -> thunk.get());
     }
 
 }
