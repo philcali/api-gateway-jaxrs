@@ -12,8 +12,8 @@ Define your resource as necessary:
 ```
 @Path("books")
 public class BookResource {
-    @Context
-    DynamoDB db;
+	@Context
+	DynamoDB db;
 
 	Table books;
 
