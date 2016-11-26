@@ -1,4 +1,4 @@
-package me.philcali.api.gateway.jaxrs;
+package me.philcali.api.gateway.jaxrs.reflection;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -12,6 +12,12 @@ import javax.ws.rs.Path;
 import javax.ws.rs.core.Application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import me.philcali.api.gateway.jaxrs.FullHttpRequest;
+import me.philcali.api.gateway.jaxrs.ObjectSupplier;
+import me.philcali.api.gateway.jaxrs.Resource;
+import me.philcali.api.gateway.jaxrs.ResourceIndex;
+import me.philcali.api.gateway.jaxrs.SingletonObjectSupplier;
 
 public class ReflectionResourceIndex implements ResourceIndex {
     private static final String STATUS_LINE = "%s %s";
@@ -28,11 +34,12 @@ public class ReflectionResourceIndex implements ResourceIndex {
     protected Map<String, Supplier<Resource>> createCachedIndex() {
         Map<String, Supplier<Resource>> table = new HashMap<>();
         String baseUri = getBasePath();
-        for (Class<?> resourceClass : application.getClasses()) {
-            Path resourcePath = resourceClass.getAnnotation(Path.class);
+        for (Map.Entry<Class<?>, ObjectSupplier<?>> entry : getSuppliers().entrySet()) {
+            final ObjectSupplier<?> supplier = entry.getValue();
+            Path resourcePath = entry.getKey().getAnnotation(Path.class);
             if (resourcePath != null) {
                 String path = baseUri + cleanedPath(resourcePath.value());
-                for (Method method : resourceClass.getMethods()) {
+                for (Method method : entry.getKey().getMethods()) {
                     for (Annotation annotation : method.getAnnotations()) {
                         String methodName = annotation.annotationType().getSimpleName();
                         switch (methodName) {
@@ -48,13 +55,24 @@ public class ReflectionResourceIndex implements ResourceIndex {
                                 childPath += cleanedPath(methodPath.value());
                             }
                             String statusLine = String.format(STATUS_LINE, methodName, childPath);
-                            table.put(statusLine, () -> new ReflectionResource(application, method, mapper));
+                            table.put(statusLine, () -> new ReflectionResource(application, method, mapper, supplier));
                         }
                     }
                 }
             }
         }
         return table;
+    }
+
+    protected Map<Class<?>, ObjectSupplier<?>> getSuppliers() {
+        Map<Class<?>, ObjectSupplier<?>> suppliers = new HashMap<>();
+        for (Object singleton : application.getSingletons()) {
+            suppliers.put(singleton.getClass(), new SingletonObjectSupplier<>(singleton));
+        }
+        for (Class<?> resourceClass : application.getClasses()) {
+            suppliers.putIfAbsent(resourceClass, new ReflectionSupplier<>(application.getProperties(), resourceClass));
+        }
+        return suppliers;
     }
 
     protected String getBasePath() {

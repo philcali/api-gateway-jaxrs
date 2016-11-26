@@ -2,6 +2,8 @@ package me.philcali.api.gateway.jaxrs;
 
 import java.util.function.Function;
 
+import me.philcali.api.gateway.jaxrs.exception.ResourceException;
+
 public class Middleware implements Function<FullHttpRequest, FullHttpResponse> {
     private final ResourceIndex index;
 
@@ -11,7 +13,20 @@ public class Middleware implements Function<FullHttpRequest, FullHttpResponse> {
 
     @Override
     public FullHttpResponse apply(FullHttpRequest request) {
-        return index.findResource(request).map(res -> res.apply(request))
-                .orElseGet(() -> new FullHttpResponse().withStatus(404).withErrorMessage("Resource not found."));
+        return index.findResource(request).map(res -> {
+            try {
+                return res.apply(request);
+            } catch (ResourceException rex) {
+                return errorResponse(rex);
+            }
+        }).orElseGet(this::missingResponse);
+    }
+
+    protected FullHttpResponse errorResponse(ResourceException ex) {
+        return new FullHttpResponse().withStatus(500).withErrorMessage(ex.toString());
+    }
+
+    protected FullHttpResponse missingResponse() {
+        return new FullHttpResponse().withStatus(404).withErrorMessage("Resource not found.");
     }
 }

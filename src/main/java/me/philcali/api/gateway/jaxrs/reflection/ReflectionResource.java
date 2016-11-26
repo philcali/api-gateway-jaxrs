@@ -1,17 +1,16 @@
-package me.philcali.api.gateway.jaxrs;
+package me.philcali.api.gateway.jaxrs.reflection;
 
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Optional;
+import java.util.function.Supplier;
 
-import javax.annotation.PostConstruct;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.Context;
@@ -19,15 +18,22 @@ import javax.ws.rs.core.Response;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import me.philcali.api.gateway.jaxrs.FullHttpRequest;
+import me.philcali.api.gateway.jaxrs.FullHttpResponse;
+import me.philcali.api.gateway.jaxrs.Resource;
+import me.philcali.api.gateway.jaxrs.exception.ResourceInvocationException;
+
 public class ReflectionResource implements Resource {
     private final Application application;
     private final Method method;
     private final ObjectMapper mapper;
+    private final Supplier<?> supplier;
 
-    public ReflectionResource(Application application, Method method, ObjectMapper mapper) {
+    public ReflectionResource(Application application, Method method, ObjectMapper mapper, Supplier<?> supplier) {
         this.application = application;
         this.method = method;
         this.mapper = mapper;
+        this.supplier = supplier;
     }
 
     protected Optional<String> getParameterizedValue(Parameter param, FullHttpRequest request) {
@@ -47,40 +53,10 @@ public class ReflectionResource implements Resource {
         return Optional.ofNullable(returnVal);
     }
 
-    protected Optional<Object> findContextType(Parameter param) {
-        return application.getProperties().values().stream()
-                .filter(value -> param.getType().isAssignableFrom(value.getClass())).findFirst();
-    }
-
-    protected void fillObjectContext(Class<?> wrapperClass, Object instance) {
-        Arrays.stream(wrapperClass.getFields()).filter(f -> f.getAnnotation(Context.class) != null).forEach(f -> {
-            application.getProperties().values().stream()
-            .filter(value -> f.getType().isAssignableFrom(value.getClass())).forEach(value -> {
-                try {
-                    f.setAccessible(true);
-                    f.set(instance, value);
-                } catch (IllegalArgumentException | IllegalAccessException e) {
-                    throw new ResourceCreationException(e);
-                }
-            });
-        });
-    }
-
-    protected void postConstructor(Class<?> wrapperClass, Object instance) {
-        Arrays.stream(wrapperClass.getMethods()).filter(m -> m.getAnnotation(PostConstruct.class) != null)
-        .forEach(m -> {
-            try {
-                m.invoke(instance);
-            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-                throw new ResourceCreationException(e);
-            }
-        });
-    }
-
     protected Object invokeMethod(Object instance, FullHttpRequest request)
             throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
         Object[] args = new Object[method.getParameterCount()];
-        for (int i = 0; i <= method.getParameterCount(); i++) {
+        for (int i = 0; i < method.getParameterCount(); i++) {
             final int index = i;
             Parameter param = method.getParameters()[i];
             getParameterizedValue(param, request).ifPresent(value -> args[index] = value);
@@ -89,7 +65,7 @@ public class ReflectionResource implements Resource {
             } else {
                 args[i] = Optional.ofNullable(param)
                         .filter(p -> p.getAnnotation(Context.class) != null)
-                        .flatMap(this::findContextType)
+                        .flatMap(p -> ReflectionUtils.findContextType(application.getProperties(), p))
                         .orElseGet(() -> {
                             try {
                                 String json = mapper.writeValueAsString(request.getBody());
@@ -103,43 +79,21 @@ public class ReflectionResource implements Resource {
         return method.invoke(instance, args);
     }
 
-    protected Object constructObject(Class<?> wrapperClass) {
-        return Arrays.stream(wrapperClass.getConstructors()).sorted(new Comparator<Constructor<?>>() {
-            @Override
-            public int compare(Constructor<?> constrA, Constructor<?> constrB) {
-                return Integer.compare(constrA.getParameterCount(), constrB.getParameterCount());
-            }
-        }).findFirst().map(construct -> {
-            final Object[] params = new Object[construct.getParameterCount()];
-            for (int i = 0; i < construct.getParameterCount(); i++) {
-                final int index = i;
-                Parameter param = construct.getParameters()[i];
-                findContextType(param).ifPresent(value -> params[index] = value);
-            }
-            try {
-                return (Object) construct.newInstance(params);
-            } catch (InstantiationException | IllegalAccessException | IllegalArgumentException
-                    | InvocationTargetException e) {
-                throw new ResourceCreationException(e);
-            }
-        }).orElseGet(() -> {
-            try {
-                return wrapperClass.newInstance();
-            } catch (InstantiationException | IllegalAccessException e) {
-                throw new ResourceCreationException(e);
-            }
+    protected Optional<String> getContentType(FullHttpRequest request) {
+        Optional<String> accept = Optional.ofNullable(request.getParams().get("Accept"));
+        return Optional.ofNullable(method.getAnnotation(Produces.class)).flatMap(produces -> {
+            return Arrays.stream(produces.value()).filter(media -> accept.filter(media::equals).isPresent())
+                    .findFirst();
         });
     }
 
     @Override
     public FullHttpResponse apply(final FullHttpRequest request) {
-        final Class<?> wrapperClass = method.getDeclaringClass();
         try {
-            final Object instance = constructObject(wrapperClass);
-            fillObjectContext(wrapperClass, instance);
-            postConstructor(wrapperClass, instance);
+            final Object instance = supplier.get();
             final Object retVal = invokeMethod(instance, request);
             final FullHttpResponse response = new FullHttpResponse();
+            getContentType(request).ifPresent(contentType -> response.addHeader("Content-Type", contentType));
             if (retVal instanceof Response) {
                 Response resp = (Response) retVal;
                 response.withStatus(resp.getStatus());

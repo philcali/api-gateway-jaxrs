@@ -6,6 +6,8 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import me.philcali.api.gateway.jaxrs.reflection.ReflectionResourceIndex;
+
 public abstract class FullHttpLamdaHandler implements RequestHandler<FullHttpRequest, FullHttpResponse> {
 
     protected abstract Application getApplication();
