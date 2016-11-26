@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 import javax.ws.rs.HeaderParam;
+import javax.ws.rs.MatrixParam;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
@@ -49,6 +50,10 @@ public class ReflectionResource implements Resource {
         HeaderParam header = param.getAnnotation(HeaderParam.class);
         if (header != null) {
             returnVal = request.getParams().get(header.value());
+        }
+        MatrixParam matrix = param.getAnnotation(MatrixParam.class);
+        if (matrix != null) {
+            returnVal = request.getParams().get(matrix.value());
         }
         return Optional.ofNullable(returnVal);
     }

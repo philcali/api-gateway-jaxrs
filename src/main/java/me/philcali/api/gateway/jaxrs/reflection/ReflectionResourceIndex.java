@@ -2,9 +2,11 @@ package me.philcali.api.gateway.jaxrs.reflection;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import javax.ws.rs.ApplicationPath;
@@ -102,4 +104,8 @@ public class ReflectionResourceIndex implements ResourceIndex {
         return Optional.ofNullable(index.get(statusLine)).map(thunk -> thunk.get());
     }
 
+    @Override
+    public Set<String> getApplicationPaths() {
+        return Collections.unmodifiableSet(index.keySet());
+    }
 }

@@ -1,9 +1,13 @@
 package me.philcali.api.gateway.jaxrs.reflection;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
 import javax.ws.rs.core.Application;
 
@@ -54,6 +58,15 @@ public class ReflectionResourceIndexTest {
         FullHttpRequest request = generateRequest("/not/found", "GET");
         Optional<Resource> result = index.findResource(request);
         assertFalse(result.isPresent());
+    }
+
+    @Test
+    public void testGetApplicationPaths() {
+        Set<String> statusLines = index.getApplicationPaths();
+        Set<String> expectedLines = new HashSet<>(
+                Arrays.asList("GET /jaxrs/tests", "GET /jaxrs/tests/echo", "GET /jaxrs/singleton",
+                        "POST /jaxrs/singleton"));
+        assertEquals(expectedLines, statusLines);
     }
 
     private FullHttpRequest generateRequest(String path, String method) {
