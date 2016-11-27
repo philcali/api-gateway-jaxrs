@@ -3,8 +3,10 @@ package me.philcali.api.gateway.jaxrs.reflection;
 import static org.junit.Assert.assertEquals;
 
 import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 
 import javax.ws.rs.core.Application;
 
@@ -13,19 +15,18 @@ import org.junit.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import me.philcali.api.gateway.jaxrs.FullHttpRequest;
-import me.philcali.api.gateway.jaxrs.FullHttpResponse;
 import me.philcali.api.gateway.jaxrs.Resource;
+import me.philcali.api.gateway.jaxrs.ResourceMethod;
 import me.philcali.api.gateway.jaxrs.model.ResourceApplication;
 import me.philcali.api.gateway.jaxrs.model.ResourceModel;
 import me.philcali.api.gateway.jaxrs.model.ResourceModel.Configuration;
-import me.philcali.api.gateway.jaxrs.reflection.ReflectionResource;
 
 public class ReflectionResourceTest {
     private Resource resource;
     private ObjectMapper mapper;
     private Application application;
     private Configuration config;
+    private ResourceModel model;
 
     @Before
     public void setUp() throws Exception {
@@ -34,24 +35,30 @@ public class ReflectionResourceTest {
         config.setPort(8080);
         mapper = new ObjectMapper();
         application = new ResourceApplication();
-        Method method = ResourceModel.class.getMethod("getTest");
-        resource = new ReflectionResource(application, method, mapper, () -> new ResourceModel(config));
+        model = new ResourceModel(config);
+        resource = new ReflectionResource(application, mapper, ResourceModel.class, () -> model, "/jaxrs");
     }
 
     @Test
-    public void testApply() {
-        FullHttpRequest request = buildRequest();
-        FullHttpResponse fullResponse = resource.apply(request);
-        assertEquals(200, fullResponse.getStatus());
-        assertEquals(config, fullResponse.getBody());
-        assertEquals("application/json", fullResponse.getHeaders().get("Content-Type"));
+    public void testGetMethods() throws NoSuchMethodException, SecurityException {
+        Method getTest = ResourceModel.class.getMethod("getTest");
+        Method per = ResourceModel.class.getMethod("getPerson");
+        Method echo = ResourceModel.class.getMethod("echo", String.class);
+        Set<ResourceMethod> methods = new HashSet<ResourceMethod>(
+                Arrays.asList(
+                        new ReflectionResourceMethod(application, resource, getTest, mapper, "GET", Optional.empty()),
+                        new ReflectionResourceMethod(application, resource, per, mapper, "GET", Optional.of("person")),
+                        new ReflectionResourceMethod(application, resource, echo, mapper, "GET", Optional.of("echo"))));
+        assertEquals(methods, resource.getMethods());
     }
 
-    private FullHttpRequest buildRequest() {
-        FullHttpRequest request = new FullHttpRequest();
-        Map<String, String> params = new HashMap<>();
-        params.put("Accept", "application/json");
-        request.setParams(params);
-        return request;
+    @Test
+    public void testGetPath() {
+        assertEquals("/jaxrs", resource.getPath());
+    }
+
+    @Test
+    public void testGetSupplier() {
+        assertEquals(model, resource.getSupplier().get());
     }
 }

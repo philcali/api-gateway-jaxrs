@@ -1,119 +1,85 @@
 package me.philcali.api.gateway.jaxrs.reflection;
 
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
-import javax.ws.rs.HeaderParam;
-import javax.ws.rs.MatrixParam;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
+import javax.ws.rs.Path;
 import javax.ws.rs.core.Application;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.Response;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import me.philcali.api.gateway.jaxrs.FullHttpRequest;
-import me.philcali.api.gateway.jaxrs.FullHttpResponse;
 import me.philcali.api.gateway.jaxrs.Resource;
-import me.philcali.api.gateway.jaxrs.exception.ResourceInvocationException;
+import me.philcali.api.gateway.jaxrs.ResourceMethod;
 
 public class ReflectionResource implements Resource {
     private final Application application;
-    private final Method method;
     private final ObjectMapper mapper;
+    private final Class<?> resourceClass;
     private final Supplier<?> supplier;
+    private final String basePath;
+    private Set<ResourceMethod> methods;
 
-    public ReflectionResource(Application application, Method method, ObjectMapper mapper, Supplier<?> supplier) {
+    public ReflectionResource(Application application, ObjectMapper mapper, Class<?> resourceClass,
+            Supplier<?> supplier, String basePath) {
         this.application = application;
-        this.method = method;
         this.mapper = mapper;
         this.supplier = supplier;
+        this.resourceClass = resourceClass;
+        this.basePath = basePath;
+        init();
     }
 
-    protected Optional<String> getParameterizedValue(Parameter param, FullHttpRequest request) {
-        String returnVal = null;
-        PathParam path = param.getAnnotation(PathParam.class);
-        if (path != null) {
-            returnVal = request.getParams().get(path.value());
-        }
-        QueryParam query = param.getAnnotation(QueryParam.class);
-        if (query != null) {
-            returnVal = request.getParams().get(query.value());
-        }
-        HeaderParam header = param.getAnnotation(HeaderParam.class);
-        if (header != null) {
-            returnVal = request.getParams().get(header.value());
-        }
-        MatrixParam matrix = param.getAnnotation(MatrixParam.class);
-        if (matrix != null) {
-            returnVal = request.getParams().get(matrix.value());
-        }
-        return Optional.ofNullable(returnVal);
-    }
-
-    protected Object invokeMethod(Object instance, FullHttpRequest request)
-            throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
-        Object[] args = new Object[method.getParameterCount()];
-        for (int i = 0; i < method.getParameterCount(); i++) {
-            final int index = i;
-            Parameter param = method.getParameters()[i];
-            getParameterizedValue(param, request).ifPresent(value -> args[index] = value);
-            if (FullHttpRequest.class.isAssignableFrom(param.getType())) {
-                args[i] = request;
-            } else {
-                args[i] = Optional.ofNullable(param)
-                        .filter(p -> p.getAnnotation(Context.class) != null)
-                        .flatMap(p -> ReflectionUtils.findContextType(application.getProperties(), p))
-                        .orElseGet(() -> {
-                            try {
-                                String json = mapper.writeValueAsString(request.getBody());
-                                return mapper.readValue(json, param.getType());
-                            } catch (IOException ie) {
-                                throw new ResourceInvocationException(ie);
-                            }
-                        });
+    protected void init() {
+        methods = new HashSet<>();
+        for (Method method : resourceClass.getMethods()) {
+            for (Annotation annotation : method.getAnnotations()) {
+                String methodName = annotation.annotationType().getSimpleName();
+                switch (methodName) {
+                case "GET":
+                case "PUT":
+                case "POST":
+                case "DELETE":
+                case "HEAD":
+                case "OPTIONS":
+                    Optional<String> path = Optional.ofNullable(method.getAnnotation(Path.class)).map(p -> p.value());
+                    methods.add(new ReflectionResourceMethod(application, this, method, mapper, methodName, path));
+                }
             }
         }
-        return method.invoke(instance, args);
-    }
-
-    protected Optional<String> getContentType(FullHttpRequest request) {
-        Optional<String> accept = Optional.ofNullable(request.getParams().get("Accept"));
-        return Optional.ofNullable(method.getAnnotation(Produces.class)).flatMap(produces -> {
-            return Arrays.stream(produces.value()).filter(media -> accept.filter(media::equals).isPresent())
-                    .findFirst();
-        });
     }
 
     @Override
-    public FullHttpResponse apply(final FullHttpRequest request) {
-        try {
-            final Object instance = supplier.get();
-            final Object retVal = invokeMethod(instance, request);
-            final FullHttpResponse response = new FullHttpResponse();
-            getContentType(request).ifPresent(contentType -> response.addHeader("Content-Type", contentType));
-            if (retVal instanceof Response) {
-                Response resp = (Response) retVal;
-                response.withStatus(resp.getStatus());
-                resp.getStringHeaders().forEach((k, v) -> response.addHeaderValues(k, v));
-                if (resp.hasEntity()) {
-                    response.withBody(resp.getEntity());
-                }
-            } else if (retVal != null) {
-                response.withStatus(200).withBody(retVal);
-            } else {
-                response.withStatus(204);
-            }
-            return response;
-        } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-            throw new ResourceInvocationException(e);
+    public Set<ResourceMethod> getMethods() {
+        return Collections.unmodifiableSet(methods);
+    }
+
+    @Override
+    public Supplier<?> getSupplier() {
+        return supplier;
+    }
+
+    @Override
+    public String getPath() {
+        return basePath;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getMethods(), basePath);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (Objects.isNull(obj) || !(obj instanceof Resource)) {
+            return false;
         }
+        Resource resource = (Resource) obj;
+        return Objects.deepEquals(getMethods(), resource.getMethods()) && Objects.equals(resource.getPath(), getPath());
     }
 }

@@ -1,13 +1,11 @@
 package me.philcali.api.gateway.jaxrs.reflection;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import javax.ws.rs.ApplicationPath;
 import javax.ws.rs.Path;
@@ -15,59 +13,43 @@ import javax.ws.rs.core.Application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import me.philcali.api.gateway.jaxrs.Context;
 import me.philcali.api.gateway.jaxrs.FullHttpRequest;
-import me.philcali.api.gateway.jaxrs.ObjectSupplier;
 import me.philcali.api.gateway.jaxrs.Resource;
 import me.philcali.api.gateway.jaxrs.ResourceIndex;
+import me.philcali.api.gateway.jaxrs.ResourceMethod;
 import me.philcali.api.gateway.jaxrs.SingletonObjectSupplier;
 
 public class ReflectionResourceIndex implements ResourceIndex {
     private static final String STATUS_LINE = "%s %s";
     private final Application application;
-    private final Map<String, Supplier<Resource>> index;
     private final ObjectMapper mapper;
+    private Map<String, ResourceMethod> index;
 
     public ReflectionResourceIndex(final Application application, final ObjectMapper mapper) {
         this.application = application;
         this.mapper = mapper;
-        this.index = createCachedIndex();
+        init();
     }
 
-    protected Map<String, Supplier<Resource>> createCachedIndex() {
-        Map<String, Supplier<Resource>> table = new HashMap<>();
+    protected void init() {
+        index = new HashMap<>();
         String baseUri = getBasePath();
-        for (Map.Entry<Class<?>, ObjectSupplier<?>> entry : getSuppliers().entrySet()) {
-            final ObjectSupplier<?> supplier = entry.getValue();
+        for (Map.Entry<Class<?>, Supplier<?>> entry : getSuppliers().entrySet()) {
+            final Supplier<?> supplier = entry.getValue();
             Path resourcePath = entry.getKey().getAnnotation(Path.class);
             if (resourcePath != null) {
                 String path = baseUri + cleanedPath(resourcePath.value());
-                for (Method method : entry.getKey().getMethods()) {
-                    for (Annotation annotation : method.getAnnotations()) {
-                        String methodName = annotation.annotationType().getSimpleName();
-                        switch (methodName) {
-                        case "GET":
-                        case "PUT":
-                        case "POST":
-                        case "DELETE":
-                        case "HEAD":
-                        case "OPTIONS":
-                            Path methodPath = method.getAnnotation(Path.class);
-                            String childPath = path;
-                            if (methodPath != null) {
-                                childPath += cleanedPath(methodPath.value());
-                            }
-                            String statusLine = String.format(STATUS_LINE, methodName, childPath);
-                            table.put(statusLine, () -> new ReflectionResource(application, method, mapper, supplier));
-                        }
-                    }
-                }
+                Resource resource = new ReflectionResource(application, mapper, entry.getKey(), supplier, path);
+                resource.getMethods().stream().forEach(method -> {
+                    index.put(String.format(STATUS_LINE, method.getMethod(), method.getPath()), method);
+                });
             }
         }
-        return table;
     }
 
-    protected Map<Class<?>, ObjectSupplier<?>> getSuppliers() {
-        Map<Class<?>, ObjectSupplier<?>> suppliers = new HashMap<>();
+    protected Map<Class<?>, Supplier<?>> getSuppliers() {
+        Map<Class<?>, Supplier<?>> suppliers = new HashMap<>();
         for (Object singleton : application.getSingletons()) {
             suppliers.put(singleton.getClass(), new SingletonObjectSupplier<>(singleton));
         }
@@ -98,14 +80,14 @@ public class ReflectionResourceIndex implements ResourceIndex {
     }
 
     @Override
-    public Optional<Resource> findResource(final FullHttpRequest request) {
-        String statusLine = String.format(STATUS_LINE, request.getContext().getMethod(),
-                request.getContext().getPath());
-        return Optional.ofNullable(index.get(statusLine)).map(thunk -> thunk.get());
+    public Optional<ResourceMethod> findMethod(final FullHttpRequest request) {
+        Context context = request.getContext();
+        String statusLine = String.format(STATUS_LINE, context.getMethod(), context.getPath());
+        return Optional.ofNullable(index.get(statusLine));
     }
 
     @Override
-    public Set<String> getApplicationPaths() {
-        return Collections.unmodifiableSet(index.keySet());
+    public Set<Resource> getResources() {
+        return index.values().stream().map(method -> method.getResource()).collect(Collectors.toSet());
     }
 }

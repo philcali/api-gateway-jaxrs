@@ -26,7 +26,7 @@ public class MiddlewareTest {
     @Test
     public void testApplyEmpty() {
         FullHttpRequest request = new FullHttpRequest();
-        when(index.findResource(request)).thenAnswer(invoke -> Optional.empty());
+        when(index.findMethod(request)).thenAnswer(invoke -> Optional.empty());
         FullHttpResponse response = middleware.apply(request);
         Map<String, Object> message = new HashMap<>();
         message.put("errorMessage", "Resource not found.");
@@ -37,9 +37,9 @@ public class MiddlewareTest {
     @Test
     public void testDefaultError() {
         FullHttpRequest request = new FullHttpRequest();
-        Resource resource = mock(Resource.class);
-        when(index.findResource(request)).thenAnswer(invoke -> Optional.of(resource));
-        when(resource.apply(request)).thenThrow(new ResourceCreationException(new RuntimeException("Test exception")));
+        ResourceMethod method = mock(ResourceMethod.class);
+        when(index.findMethod(request)).thenAnswer(invoke -> Optional.of(method));
+        when(method.apply(request)).thenThrow(new ResourceCreationException(new RuntimeException("Test exception")));
         FullHttpResponse response = middleware.apply(request);
         Map<String, Object> message = new HashMap<>();
         message.put("errorMessage", "Test exception");
@@ -51,9 +51,9 @@ public class MiddlewareTest {
     public void testApply() {
         FullHttpRequest request = new FullHttpRequest();
         FullHttpResponse response = new FullHttpResponse();
-        Resource resource = mock(Resource.class);
-        when(index.findResource(request)).thenAnswer(invoke -> Optional.of(resource));
-        when(resource.apply(request)).thenAnswer(invoke -> {
+        ResourceMethod method = mock(ResourceMethod.class);
+        when(index.findMethod(request)).thenAnswer(invoke -> Optional.of(method));
+        when(method.apply(request)).thenAnswer(invoke -> {
             return response.withStatus(204).addHeader("X-Test", "Something");
         });
         FullHttpResponse expectedResponse = middleware.apply(request);
