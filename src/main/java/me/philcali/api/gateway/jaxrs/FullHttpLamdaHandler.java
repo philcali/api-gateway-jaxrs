@@ -77,6 +77,8 @@ public abstract class FullHttpLamdaHandler implements RequestHandler<FullHttpReq
 
     protected abstract Application getApplication();
 
+    public abstract String getVersion();
+
     @Override
     public FullHttpResponse handleRequest(FullHttpRequest request, Context context) {
         Application application = getApplication();

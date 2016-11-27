@@ -13,9 +13,9 @@ public class Middleware implements Function<FullHttpRequest, FullHttpResponse> {
 
     @Override
     public FullHttpResponse apply(FullHttpRequest request) {
-        return index.findResource(request).map(res -> {
+        return index.findMethod(request).map(method -> {
             try {
-                return res.apply(request);
+                return method.apply(request);
             } catch (ResourceException rex) {
                 return errorResponse(rex);
             }
