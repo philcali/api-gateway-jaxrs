@@ -1,6 +1,7 @@
 package me.philcali.api.gateway.jaxrs.reflection;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -20,6 +21,7 @@ import me.philcali.api.gateway.jaxrs.ResourceMethod;
 import me.philcali.api.gateway.jaxrs.model.ResourceApplication;
 import me.philcali.api.gateway.jaxrs.model.ResourceModel;
 import me.philcali.api.gateway.jaxrs.model.ResourceModel.Configuration;
+import me.philcali.api.gateway.jaxrs.model.SingletonResourceModel;
 
 public class ReflectionResourceTest {
     private Resource resource;
@@ -60,5 +62,15 @@ public class ReflectionResourceTest {
     @Test
     public void testGetSupplier() {
         assertEquals(model, resource.getSupplier().get());
+    }
+
+    @Test
+    public void testSubResource() {
+        Resource resource = new ReflectionResource(application, mapper, SingletonResourceModel.class,
+                () -> new SingletonResourceModel(config), "/jaxrs");
+        assertFalse(resource.getResources().isEmpty());
+        Resource childResource = resource.getResources().stream().findFirst().get();
+        assertEquals("/jaxrs/person", childResource.getPath());
+        assertEquals("GET", childResource.getMethods().stream().findFirst().get().getMethod());
     }
 }

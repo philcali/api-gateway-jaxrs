@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import me.philcali.api.gateway.jaxrs.FullHttpRequest;
 import me.philcali.api.gateway.jaxrs.FullHttpResponse;
+import me.philcali.api.gateway.jaxrs.PathUtils;
 import me.philcali.api.gateway.jaxrs.Resource;
 import me.philcali.api.gateway.jaxrs.ResourceMethod;
 import me.philcali.api.gateway.jaxrs.exception.ResourceInvocationException;
@@ -76,7 +77,7 @@ public class ReflectionResourceMethod implements ResourceMethod {
 
     @Override
     public String getPath() {
-        return resource.getPath() + path.map(this::correctPath).orElse("");
+        return resource.getPath() + path.map(PathUtils::normalize).orElse("");
     }
 
     @Override
@@ -149,21 +150,5 @@ public class ReflectionResourceMethod implements ResourceMethod {
             return Arrays.stream(produces.value()).filter(media -> accept.filter(media::equals).isPresent())
                     .findFirst();
         });
-    }
-
-    protected String correctPath(String base) {
-        if (base.equals("/")) {
-            return "";
-        } else {
-            int lastSlash = base.lastIndexOf('/');
-            if (lastSlash == base.length() - 1) {
-                base = base.substring(0, lastSlash);
-            }
-            if (base.indexOf('/') == 0) {
-                return base;
-            } else {
-                return "/" + base;
-            }
-        }
     }
 }

@@ -24,24 +24,25 @@ public class ReflectionResourceIndex implements ResourceIndex {
     private static final String STATUS_LINE = "%s %s";
     private final Application application;
     private final ObjectMapper mapper;
+    private final String basePath;
     private Map<String, ResourceMethod> index;
 
     public ReflectionResourceIndex(final Application application, final ObjectMapper mapper) {
         this.application = application;
         this.mapper = mapper;
+        this.basePath = getBasePath();
         init();
     }
 
     protected void init() {
         index = new HashMap<>();
-        String baseUri = getBasePath();
         for (Map.Entry<Class<?>, Supplier<?>> entry : getSuppliers().entrySet()) {
             final Supplier<?> supplier = entry.getValue();
             Path resourcePath = entry.getKey().getAnnotation(Path.class);
             if (resourcePath != null) {
-                String path = baseUri + cleanedPath(resourcePath.value());
+                String path = basePath + cleanedPath(resourcePath.value());
                 Resource resource = new ReflectionResource(application, mapper, entry.getKey(), supplier, path);
-                resource.getMethods().stream().forEach(method -> {
+                resource.getAllMethods().stream().forEach(method -> {
                     index.put(String.format(STATUS_LINE, method.getMethod(), method.getPath()), method);
                 });
             }
@@ -89,5 +90,10 @@ public class ReflectionResourceIndex implements ResourceIndex {
     @Override
     public Set<Resource> getResources() {
         return index.values().stream().map(method -> method.getResource()).collect(Collectors.toSet());
+    }
+
+    @Override
+    public String getPath() {
+        return basePath;
     }
 }

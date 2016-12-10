@@ -6,4 +6,5 @@ import java.util.Set;
 public interface ResourceIndex {
     public Optional<ResourceMethod> findMethod(FullHttpRequest request);
     public Set<Resource> getResources();
+    public String getPath();
 }

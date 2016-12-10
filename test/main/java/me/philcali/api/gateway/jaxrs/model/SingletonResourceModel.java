@@ -25,4 +25,9 @@ public class SingletonResourceModel {
         this.config.setAddress(config.getAddress());
         return this.config;
     }
+
+    @Path("/person")
+    public Class<SubResourceModel> getPersonModel() {
+        return SubResourceModel.class;
+    }
 }
