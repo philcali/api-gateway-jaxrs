@@ -67,7 +67,7 @@ public class ReflectionResourceIndexTest {
                 .map(method -> method.getMethod() + " " + method.getPath()).collect(Collectors.toSet());
         Set<String> expectedLines = new HashSet<>(
                 Arrays.asList("GET /jaxrs/tests", "GET /jaxrs/tests/person", "GET /jaxrs/tests/echo",
-                        "GET /jaxrs/singleton", "POST /jaxrs/singleton"));
+                        "GET /jaxrs/singleton", "POST /jaxrs/singleton", "GET /jaxrs/singleton/person"));
         assertEquals(expectedLines, statusLines);
     }
 
