@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import javax.ws.rs.container.ResourceContext;
 import javax.ws.rs.core.Application;
 
 import com.amazonaws.services.lambda.runtime.Context;
@@ -14,6 +15,8 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import me.philcali.api.gateway.jaxrs.exception.ResourceException;
+import me.philcali.api.gateway.jaxrs.provider.Providers;
+import me.philcali.api.gateway.jaxrs.provider.ResourceContextProvider;
 import me.philcali.api.gateway.jaxrs.reflection.ReflectionResourceIndex;
 
 public abstract class FullHttpLamdaHandler implements RequestHandler<FullHttpRequest, FullHttpResponse> {
@@ -81,7 +84,10 @@ public abstract class FullHttpLamdaHandler implements RequestHandler<FullHttpReq
 
     @Override
     public FullHttpResponse handleRequest(FullHttpRequest request, Context context) {
-        Application application = getApplication();
+        Application application = new LambdaApplication(getApplication(), new Providers()
+                .addProvider(request)
+                .addProvider(context)
+                .addProvider(ResourceContext.class, new ResourceContextProvider()));
         Middleware middleware = new Middleware(new ReflectionResourceIndex(application, new ObjectMapper()));
         return middleware.apply(request);
     }
