@@ -46,11 +46,10 @@ public class ReflectionResourceTest {
         Method getTest = ResourceModel.class.getMethod("getTest");
         Method per = ResourceModel.class.getMethod("getPerson");
         Method echo = ResourceModel.class.getMethod("echo", String.class);
-        Set<ResourceMethod> methods = new HashSet<ResourceMethod>(
-                Arrays.asList(
-                        new ReflectionResourceMethod(application, resource, getTest, mapper, "GET", Optional.empty()),
-                        new ReflectionResourceMethod(application, resource, per, mapper, "GET", Optional.of("person")),
-                        new ReflectionResourceMethod(application, resource, echo, mapper, "GET", Optional.of("echo"))));
+        Set<ResourceMethod> methods = new HashSet<ResourceMethod>(Arrays.asList(
+                new ReflectionResourceMethod(application, resource, getTest, mapper, "GET", Optional.empty()),
+                new ReflectionResourceMethod(application, resource, per, mapper, "GET", Optional.of("person")),
+                new ReflectionResourceMethod(application, resource, echo, mapper, "GET", Optional.of("echo"))));
         assertEquals(methods, resource.getMethods());
     }
 
